@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Project specific
+known_faces/
+face_recognition.log
+encodings_cache_deepface.npz
+_archive/
+venv/
+env/
+.env
+
+# OS specific
+.DS_Store
+Thumbs.db

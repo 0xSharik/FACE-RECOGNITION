@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition | Live</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --neon-green: #00ff41;
+            --dark-bg: #0d1117;
+            --glass: rgba(22, 27, 34, 0.7);
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: #e6edf3;
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .mono {
+            font-family: 'Major Mono Display', monospace;
+        }
+
+        /* Scanline Effect */
+        .scanline {
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+            background-size: 100% 4px;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .hud-border {
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            background: rgba(13, 17, 23, 0.6);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+        }
+
+        .glow {
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            box-shadow: 0 0 8px #3fb950;
+        }
+
+        video {
+            transform: scaleX(-1);
+            /* Mirror effect */
+            object-fit: cover;
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col relative">
+
+    <!-- Background Elements -->
+    <div class="fixed top-0 left-0 w-full h-full opacity-20 pointer-events-none"
+        style="background: radial-gradient(circle at 50% 50%, #171b21 0%, #0d1117 100%);"></div>
+
+    <!-- Nav -->
+    <nav class="flex justify-between items-center px-8 py-6 z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-2 h-8 bg-green-500 rounded-full"></div>
+            <h1 class="text-2xl font-bold tracking-tight">VISION<span class="text-gray-500">OS</span></h1>
+        </div>
+        <a href="/admin" class="text-sm border border-gray-700 px-4 py-2 rounded-full hover:bg-gray-800 transition">
+            Admin Panel
+        </a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 px-4 lg:px-12 py-4 z-10">
+
+        <!-- Video Feed Section -->
+        <div class="relative w-full max-w-2xl aspect-video hud-border glow p-1 group">
+            <div class="scanline"></div>
+
+            <!-- Corner Accents -->
+            <div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-green-500/50 rounded-tl-lg"></div>
+            <div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-green-500/50 rounded-tr-lg"></div>
+            <div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-green-500/50 rounded-bl-lg"></div>
+            <div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-green-500/50 rounded-br-lg">
+            </div>
+
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="canvas" class="hidden"></canvas>
+
+            <!-- Loading Overlay -->
+            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-black/80 rounded-xl z-20">
+                <div class="text-center">
+                    <div class="text-green-500 text-xl font-mono mb-2">INITIALIZING SENSORS...</div>
+                    <div class="text-xs text-gray-500">Please allow camera access</div>
+                </div>
+            </div>
+
+            <!-- Live Badge -->
+            <div
+                class="absolute top-4 left-4 flex items-center gap-2 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm z-20">
+                <div class="status-dot animate-pulse"></div>
+                <span class="text-xs font-mono tracking-wider text-green-400">LIVE FEED</span>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="w-full max-w-sm flex flex-col gap-4">
+
+            <!-- Identity Card -->
+            <div class="hud-border p-6 min-h-[200px] flex flex-col justify-center items-center text-center transition-all duration-300"
+                id="result-card">
+                <div class="w-24 h-24 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center mb-4 transition-colors duration-300"
+                    id="avatar-ring">
+                    <svg class="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </div>
+
+                <div class="text-sm text-gray-400 mono mb-1">IDENTIFIED SUBJECT</div>
+                <h2 class="text-3xl font-bold text-white mb-2 truncate max-w-full" id="name-display">SCANNING...</h2>
+
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-gray-500">CONFIDENCE:</span>
+                    <span class="text-green-400 font-mono" id="confidence-display">--%</span>
+                </div>
+            </div>
+
+            <!-- Stats/Logs -->
+            <div class="hud-border p-4 flex-1">
+                <div class="text-xs text-gray-500 font-mono mb-3 border-b border-gray-800 pb-2">SYSTEM LOGS</div>
+                <div class="font-mono text-xs text-green-500/80 space-y-1 h-32 overflow-hidden" id="logs">
+                    <div>> System initialized</div>
+                    <div>> Connecting to neural engine...</div>
+                    <div>> Ready for input</div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="text-center py-6 text-gray-600 text-xs">
+        &copy; Designed by Sharik Hasan | Github - 0xsharik
+    </footer>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const loading = document.getElementById('loading');
+        const nameDisplay = document.getElementById('name-display');
+        const confDisplay = document.getElementById('confidence-display');
+        const avatarRing = document.getElementById('avatar-ring');
+        const logs = document.getElementById('logs');
+
+        // Session ID
+        const SESSION_ID = crypto.randomUUID();
+        console.log("Session ID:", SESSION_ID);
+
+        // State
+        let isProcessing = false;
+
+        // Video Element Reset Helper
+        function resetVideoElement() {
+            video.pause();
+            video.removeAttribute("src");
+            video.removeAttribute("srcObject");
+            video.load();
+        }
+
+        // Cleanup Helper
+        function stopExistingStream() {
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+            }
+        }
+
+        let retryCount = 0;
+
+        // Start Camera (Bulletproof)
+        async function startCamera() {
+            addLog("Requesting camera access...");
+            loading.classList.remove("hidden");
+            loading.innerHTML = "<div class='text-center'><div class='text-green-500 text-xl font-mono mb-2'>INITIALIZING SENSORS...</div><div class='text-xs text-gray-500'>Please allow camera access</div></div>";
+
+            stopExistingStream();
+            resetVideoElement();
+
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+                addLog("Camera permission granted");
+            } catch (err) {
+                handleCameraError(err);
+                return;
+            }
+
+            video.srcObject = stream;
+
+            try {
+                // Wait one tick before play
+                await new Promise(r => setTimeout(r, 100));
+                await video.play();
+                addLog("Video playback started");
+            } catch (err) {
+                handleCameraError(err);
+                return;
+            }
+
+            // HARD CHECK: ensure frames are actually flowing
+            const start = performance.now();
+            const waitForFrames = () => {
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    loading.classList.add("hidden");
+                    addLog("Camera stream active");
+                    startDetectionLoop();
+                    retryCount = 0; // Reset retry count on success
+                    return;
+                }
+
+                if (performance.now() - start > 4000) {
+                    handleCameraError(new Error("Frame timeout"));
+                    return;
+                }
+
+                requestAnimationFrame(waitForFrames);
+            };
+            waitForFrames();
+        }
+
+        function handleCameraError(err) {
+            console.error(err);
+            addLog("CAMERA ERROR: " + (err.name || err.message));
+
+            let msg = "Camera failed to start";
+
+            switch (err.name) {
+                case "NotAllowedError":
+                case "PermissionDeniedError":
+                    msg = "Camera permission denied";
+                    break;
+                case "NotFoundError":
+                    msg = "No camera device found";
+                    break;
+                case "NotReadableError":
+                    msg = "Camera already in use by another app";
+                    break;
+                case "AbortError":
+                    msg = "Camera startup timeout. Close other apps using the camera.";
+                    break;
+                default:
+                    if (err.message === "Frame timeout") {
+                        msg = "Camera started but sent no video frames.";
+                    } else {
+                        msg = "Camera initialization failed";
+                    }
+            }
+
+            loading.innerHTML = `
+                <div class="text-red-500 font-bold text-center">
+                    ${msg}<br>
+                    <button onclick="retryCamera()" class="mt-3 px-4 py-2 border border-red-500 rounded hover:bg-red-900 transition text-sm text-white">
+                        Retry Camera
+                    </button>
+                    <div class="text-xs font-normal text-gray-400 mt-2">${err.message || ""}</div>
+                </div>
+            `;
+            loading.classList.remove("hidden");
+
+            // Auto-retry ONCE for hiccups
+            if (retryCount < 1 && (err.name === "AbortError" || err.message === "Frame timeout")) {
+                retryCount++;
+                addLog(`Auto-retrying camera (${retryCount}/1)...`);
+                setTimeout(startCamera, 1000);
+            }
+        }
+
+        function retryCamera() {
+            retryCount = 0;
+            startCamera();
+        }
+
+        // Cleanup on unload to prevent browser lock
+        window.addEventListener("beforeunload", () => {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(t => t.stop());
+            }
+        });
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.textContent = `> ${msg}`;
+            logs.prepend(div);
+            if (logs.children.length > 8) logs.lastChild.remove();
+        }
+
+        async function detectFace() {
+            if (isProcessing) return;
+
+            // Guard: don't process if camera not ready
+            if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused || video.ended) {
+                return;
+            }
+
+            isProcessing = true;
+
+            // Capture frame
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Get base64 string
+            const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+            try {
+                const response = await fetch('/api/recognize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: imageBase64,
+                        session_id: SESSION_ID
+                    })
+                });
+
+                if (response.status === 503) {
+                    // Service is stopped
+                    nameDisplay.textContent = "SERVICE PAUSED";
+                    nameDisplay.classList.remove('text-green-400');
+                    nameDisplay.classList.add('text-red-500');
+                    avatarRing.className = "w-24 h-24 rounded-full bg-gray-800 border-2 border-red-900 flex items-center justify-center mb-4 transition-colors duration-300";
+                    confDisplay.textContent = "OFF";
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    updateUI(data.name, data.distance);
+                } else if (data.status === 'no_face') {
+                    resetUI();
+                } else {
+                    // Error or other status
+                    updateUI("Unknown", 1.0);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        function updateUI(name, distance) {
+            // Threshold Check: Even if backend sends a name, if we want strict client-side limits
+            // But better to trust backend. 
+
+            if (name !== 'Unknown' && name !== null) {
+                nameDisplay.textContent = name.toUpperCase();
+                nameDisplay.classList.add('text-green-400');
+                nameDisplay.classList.remove('text-gray-400', 'animate-pulse');
+
+                avatarRing.classList.add('border-green-500', 'shadow-[0_0_20px_rgba(34,197,94,0.3)]');
+                avatarRing.classList.remove('border-gray-700');
+
+                // Calculate pseudo-confidence
+                let conf = Math.max(0, (1 - (distance / 0.8)) * 100).toFixed(1); // Stricter visual scale
+                confDisplay.textContent = conf + "%";
+            } else {
+                // No match or Unknown
+                resetUI();
+            }
+        }
+
+        function resetUI() {
+            nameDisplay.textContent = "SCANNING...";
+            nameDisplay.classList.remove('text-green-400');
+            nameDisplay.classList.add('text-gray-400', 'animate-pulse');
+
+            avatarRing.classList.remove('border-green-500', 'shadow-[0_0_20px_rgba(34,197,94,0.3)]');
+            avatarRing.classList.add('border-gray-700');
+
+            confDisplay.textContent = "--%";
+        }
+
+        function startDetectionLoop() {
+            // Run detection every 500ms
+            setInterval(detectFace, 500);
+        }
+
+        // Init
+        startCamera();
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,11 @@
+flask
+flask-cors
+flask-socketio
+opencv-python-headless
+numpy
+deepface
+tf-keras
+tensorflow
+scikit-learn
+requests
+gunicorn
