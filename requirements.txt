@@ -9,3 +9,5 @@ tensorflow
 scikit-learn
 requests
 gunicorn
+
+opencv-python==0.0.0
