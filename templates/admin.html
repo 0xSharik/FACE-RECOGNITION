@@ -354,8 +354,6 @@
         document.getElementById('adminToken').value = localStorage.getItem('admin_token') || '';
 
         // --- DASHBOARD LOGIC ---
-        let isStreamActive = false;
-
         async function updateDashboard() {
             try {
                 const token = localStorage.getItem('admin_token');
@@ -399,40 +397,19 @@
 
         function viewStream(sid) {
             const modal = document.getElementById('streamModal');
-            document.getElementById('streamImage').src = "";
-            modal.style.display = 'flex';
-            document.getElementById('streamTitle').innerText = `Session: ${sid}`;
-
-            isStreamActive = true;
-            pollStream(sid);
-        }
-
-        async function pollStream(sid) {
-            if (!isStreamActive) return;
-
             const img = document.getElementById('streamImage');
-            const token = localStorage.getItem('admin_token');
-            const headers = token ? { 'X-ADMIN-TOKEN': token } : {};
+            const token = localStorage.getItem('admin_token') || '';
 
-            try {
-                const res = await fetch(`/api/admin/frame/${sid}`, { headers });
-                if (res.ok && res.status === 200) {
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
+            document.getElementById('streamTitle').innerText = `Session: ${sid}`;
+            modal.style.display = 'flex';
 
-                    if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
-                    img.src = url;
-                }
-            } catch (e) {
-                console.error(e);
-            }
-
-            if (isStreamActive) setTimeout(() => pollStream(sid), 1000); // 1s delay
+            // Direct MJPEG Source (Browser handles streaming)
+            img.src = `/api/admin/feed/${sid}?token=${encodeURIComponent(token)}`;
         }
 
         function closeStreamModal() {
             document.getElementById('streamModal').style.display = 'none';
-            isStreamActive = false;
+            document.getElementById('streamImage').src = ""; // Stop stream
         }
 
         setInterval(updateDashboard, 2000);

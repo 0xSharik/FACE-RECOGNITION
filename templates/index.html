@@ -405,9 +405,45 @@
             confDisplay.textContent = "--%";
         }
 
+        let isPreviewBusy = false;
+
+        async function sendPreviewFrame() {
+            if (isPreviewBusy) return;
+            if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused || video.ended) return;
+
+            isPreviewBusy = true;
+
+            // Capture small frame for preview (save bandwidth)
+            const offscreen = document.createElement('canvas');
+            offscreen.width = 320;
+            offscreen.height = 240;
+            const ctx = offscreen.getContext('2d');
+            ctx.drawImage(video, 0, 0, 320, 240);
+
+            // Low quality jpeg for speed
+            const imageBase64 = offscreen.toDataURL('image/jpeg', 0.4);
+
+            try {
+                // Await to ensure we don't stack requests
+                await fetch('/api/push_frame', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: imageBase64,
+                        session_id: SESSION_ID
+                    })
+                });
+            } catch (e) { } finally {
+                isPreviewBusy = false;
+            }
+        }
+
         function startDetectionLoop() {
-            // Run detection every 500ms
-            setInterval(detectFace, 500);
+            // 1. High-speed Preview Loop (20 FPS) -> For Admin Stream
+            setInterval(sendPreviewFrame, 50);
+
+            // 2. Slower Logic Loop (0.5 FPS) -> For Recognition/Proctoring
+            setInterval(detectFace, 2000);
         }
 
         // Init

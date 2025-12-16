@@ -8,7 +8,7 @@ import base64
 import uuid
 import shutil
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask import Flask, render_template, jsonify, request, redirect, url_for, Response
 from flask_cors import CORS
 import logging
 from datetime import datetime
@@ -128,7 +128,7 @@ def require_admin(f):
     def decorated_function(*args, **kwargs):
         admin_token = os.environ.get('ADMIN_TOKEN')
         if admin_token:
-            token = request.headers.get('X-ADMIN-TOKEN')
+            token = request.headers.get('X-ADMIN-TOKEN') or request.args.get('token')
             if not token or token != admin_token:
                 return jsonify({'error': 'Unauthorized', 'message': 'Invalid or missing Admin Token'}), 401
         return f(*args, **kwargs)
@@ -258,7 +258,43 @@ def recognize():
 
     except Exception as e:
         logger.error(f"Error: {e}")
+    except Exception as e:
+        logger.error(f"Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/push_frame', methods=['POST'])
+def push_frame():
+    """
+    Lightweight endpoint just for Admin Live View.
+    Decodes frame, resizes, and updates session_frames.
+    No DeepFace recognition here (too slow).
+    """
+    data = request.get_json()
+    if not data or 'image' not in data:
+         return jsonify({'status': 'error'}), 400
+    
+    sid = request.args.get('session_id') or data.get('session_id')
+    if not sid:
+         return jsonify({'status': 'error'}), 400
+
+    try:
+        # Decode
+        image_data = data['image'].split(',')[1] if ',' in data['image'] else data['image']
+        image_bytes = base64.b64decode(image_data)
+        np_arr = np.frombuffer(image_bytes, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+             return jsonify({'status': 'error'}), 400
+
+        # Resize & Compress for Admin
+        admin_small = cv2.resize(frame, (320, 240))
+        _, admin_jpeg = cv2.imencode('.jpg', admin_small, [cv2.IMWRITE_JPEG_QUALITY, 30])
+        session_frames[sid] = admin_jpeg.tobytes()
+        
+        return jsonify({'status': 'ok'}), 200
+    except Exception:
+        return jsonify({'status': 'error'}), 500
 
 def update_session(sid, status, name, conf):
     now_str = datetime.now().isoformat()
@@ -295,6 +331,24 @@ def admin_frame(sid):
     if not blob:
         return "", 204 # No Content
     return (blob, 200, {'Content-Type': 'image/jpeg'})
+
+def generate_frames(sid):
+    while True:
+        # Get latest frame for session
+        frame_bytes = session_frames.get(sid)
+        if frame_bytes:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        else:
+            time.sleep(0.1) # Wait if no frame available
+        
+        # Cap FPS to ~20 to prevent saturation (0.05s sleep)
+        time.sleep(0.05)
+
+@app.route('/api/admin/feed/<sid>')
+@require_admin
+def admin_feed(sid):
+    return Response(generate_frames(sid), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 
